@@ -1,13 +1,13 @@
 # demo-video
 
-A [Claude Code](https://code.claude.com) plugin for macOS. It records a short video that shows a pull request's feature actually working, adds spoken narration and captions, and can attach the video to the PR.
+A [Claude Code](https://code.claude.com) plugin for macOS. It records a short video that shows a pull request's feature actually working, adds spoken narration (and captions if you ask), and can attach the video to the PR.
 
 Reviewers press play and see the change; they do not have to check out the branch.
 
 ## What you get
 
 - **Real screen recordings**, not screenshots. Two targets: `web` records Chromium through [agent-browser](https://github.com/vercel-labs/agent-browser); `ios` records Safari on the iOS Simulator (real WebKit) through [agent-device](https://www.npmjs.com/package/agent-device) and `xcrun simctl`.
-- **One sentence of narration per scene**, spoken by macOS `say` and also burned in as a caption, so the video works with the sound off.
+- **One sentence of narration per scene**, spoken by macOS `say`. Pass `-c` to also burn it in as captions, so the video works with the sound off.
 - **A short title card before each scene** naming what is about to happen.
 - **A paste-ready PR comment** (`summary.md`) with a table of scenes, and optionally the upload itself via `gh pr comment --attach`.
 
@@ -16,7 +16,7 @@ Everything runs on your machine. Narration text is never sent to a service.
 ## How it works
 
 ```text
-/demo-video:record <web|ios> [video-name] [#PR or PR URL] [scene requests...]
+/demo-video:record [-w|-i] [-t "name"] [-pr #123|url] [-c] [-sr "scene requests"]
   1. Script      write scenes.tsv: one line per scene = id, what happens, narration sentence
   2. Record      one video file per scene, driving the app in Chromium or Simulator Safari
   3. Build       scripts/build.sh: narration → captions → title cards → ffmpeg → one mp4 + summary.md
@@ -61,10 +61,21 @@ claude --plugin-dir ./demo-video
 ## Use
 
 ```text
-/demo-video:record web                      # record the current branch's feature in Chromium; prints the gh command to attach
-/demo-video:record ios checkout-flow #123   # record in Simulator Safari, save as "checkout-flow", attach to PR #123 after you confirm
-/demo-video:record web search-filter show the empty state and the reset button
+/demo-video:record                                  # Chromium, named after the current branch; prints the gh command to attach
+/demo-video:record -i -t checkout-flow -pr #123 -c   # Simulator Safari, saved as "checkout-flow", captions on, attached to PR #123 after you confirm
+/demo-video:record -sr "show the empty state and the reset button"
 ```
+
+| Flag | Meaning | Default |
+| --- | --- | --- |
+| `-w` | record Chromium | on |
+| `-i` | record Safari on the iOS Simulator (real WebKit) | |
+| `-t "name"` | video name (folder and file) | current branch name |
+| `-pr #123` or a PR URL | attach to that PR after you confirm | none: build only and print the command |
+| `-c` | burn the narration in as captions | off |
+| `-sr "text"` | requests for what the scenes should show; bare words count too | none |
+
+Flags can come in any order.
 
 Videos are built in `~/Movies/pr-demo/<video-name>/` (set `PR_DEMO_DIR` to change). If the video is attached to the PR, that folder is deleted afterwards; the PR comment is the copy that matters. If nothing is attached, the folder is kept.
 
@@ -84,9 +95,9 @@ The plugin itself contains nothing specific to any project.
 
 ### Narration voice and captions
 
-`build.sh` uses the system's default voice unless you pass `--voice NAME` (for Japanese, `--voice Kyoko`). The name is checked first, because `say` silently uses a different voice when the name is wrong. Captions use the system font, which covers Latin, CJK and other scripts; `--font NAME` overrides it.
+`build.sh` uses the system's default voice unless you pass `--voice NAME` (for Japanese, `--voice Kyoko`). The name is checked first, because `say` silently uses a different voice when the name is wrong. Captions are off unless `--captions` is given (`-c` on the command does this); they use the system font, which covers Latin, CJK and other scripts, and `--font NAME` overrides it.
 
-Other `build.sh` options: `--rate` (words per minute), `--height` (max output height, default 1280), `--crf` (quality), `--font-size`, `--title-color`, `--title-sec`, `--no-captions`, `--no-title-cards`.
+Other `build.sh` options: `--rate` (words per minute), `--height` (max output height, default 1280), `--crf` (quality), `--font-size`, `--title-color`, `--title-sec`, `--no-title-cards`.
 
 ## What is Claude Code-specific
 
@@ -103,6 +114,7 @@ skills/record/
 │   ├── ios-safari.md        Simulator Safari: checks before recording, recording, input quirks
 │   └── web-chromium.md      agent-browser: setup, viewport, recording
 └── scripts/
+    ├── args.sh              parses the command flags into key=value lines
     ├── build.sh             scenes.tsv → narration → captions → title cards → ffmpeg → mp4 + summary.md
     ├── rec.sh               start/stop a simulator screen recording
     └── caption.swift        draws caption and title images with CoreText (no ffmpeg text filters needed)
@@ -112,12 +124,12 @@ skills/record/
 
 ## 日本語
 
-macOS 向けの [Claude Code](https://code.claude.com) plugin です。PR の機能が実際に動く様子を短い動画に録画し、ナレーションと字幕を付けて、PR に添付できます。レビュアーは再生するだけで変更を確認でき、ブランチをチェックアウトする必要がありません。
+macOS 向けの [Claude Code](https://code.claude.com) plugin です。PR の機能が実際に動く様子を短い動画に録画し、ナレーション（指定すれば字幕も）を付けて、PR に添付できます。レビュアーは再生するだけで変更を確認でき、ブランチをチェックアウトする必要がありません。
 
 ### できること
 
 - **実操作の録画**（静止画ではない）。`web` は agent-browser で Chromium を、`ios` は agent-device と `xcrun simctl` で iOS シミュレータの Safari（本物の WebKit）を録画
-- **シーンごとに 1 文のナレーション**を macOS の `say` で読み上げ、同じ文を字幕として焼き込む。音を出せない環境でも内容が伝わる
+- **シーンごとに 1 文のナレーション**を macOS の `say` で読み上げ。`-c` を付けると同じ文を字幕として焼き込み、音を出せない環境でも内容が伝わる
 - **各シーンの前に短いタイトルカード**
 - **貼り付け用の PR コメント本文**（`summary.md`、シーンの表入り）。PR 番号を渡せば `gh pr comment --attach` で添付まで行う
 
@@ -126,7 +138,7 @@ macOS 向けの [Claude Code](https://code.claude.com) plugin です。PR の機
 ### 動き方
 
 ```text
-/demo-video:record <web|ios> [動画名] [#PR か PR の URL] [シーンの要望...]
+/demo-video:record [-w|-i] [-t "動画名"] [-pr #123|URL] [-c] [-sr "シーンの要望"]
   1. 台本      scenes.tsv を書く。1 行 1 シーン = id、操作の要点、ナレーション 1 文
   2. 録画      シーンごとに 1 ファイル。Chromium かシミュレータ Safari でアプリを操作
   3. 組み立て  scripts/build.sh: 音声 → 字幕 → タイトルカード → ffmpeg → 1 本の mp4 + summary.md
@@ -171,10 +183,21 @@ claude --plugin-dir ./demo-video
 ### 使い方
 
 ```text
-/demo-video:record web                      # 現在のブランチの機能を Chromium で録画。添付用の gh コマンドを表示
-/demo-video:record ios checkout-flow #123   # シミュレータ Safari で録画し「checkout-flow」として保存、確認のうえ PR #123 に添付
-/demo-video:record web search-filter 空の状態とリセットボタンを見せて
+/demo-video:record                                  # Chromium で録画、動画名はブランチ名。添付用の gh コマンドを表示
+/demo-video:record -i -t checkout-flow -pr #123 -c   # シミュレータ Safari で録画、「checkout-flow」として保存、字幕あり、確認のうえ PR #123 に添付
+/demo-video:record -sr "空の状態とリセットボタンを見せて"
 ```
+
+| フラグ | 意味 | 既定 |
+| --- | --- | --- |
+| `-w` | Chromium で録画 | これ |
+| `-i` | iOS シミュレータの Safari（本物の WebKit）で録画 | |
+| `-t "名前"` | 動画名（フォルダとファイル名） | 現在のブランチ名 |
+| `-pr #123` か PR の URL | 確認のうえ、その PR に添付 | なし。動画を作ってコマンドを表示するだけ |
+| `-c` | ナレーションを字幕として焼き込む | なし |
+| `-sr "文"` | シーンで見せたいことの要望。フラグ無しの語も同じ扱い | なし |
+
+フラグの順番は自由です。
 
 動画は `~/Movies/pr-demo/<動画名>/` に作られます（`PR_DEMO_DIR` で変更可）。PR に添付できたらこのフォルダは削除されます。原本は PR のコメントです。添付しなかった場合は残ります。
 
@@ -194,7 +217,7 @@ plugin 本体には特定のプロジェクトの情報は入っていません�
 
 ### ナレーションの声と字幕
 
-`build.sh` は `--voice 名前` を渡さなければ OS の既定音声を使います（日本語なら `--voice Kyoko`）。`say` は存在しない名前を渡すと黙って別の声になるので、先に名前を検証します。字幕はシステムフォントで描くため、日本語を含む多くの文字に対応します。`--font 名前` で変更できます。
+`build.sh` は `--voice 名前` を渡さなければ OS の既定音声を使います（日本語なら `--voice Kyoko`）。`say` は存在しない名前を渡すと黙って別の声になるので、先に名前を検証します。字幕は `--captions`（コマンドの `-c`）を付けたときだけ焼き込み、システムフォントで描くため日本語を含む多くの文字に対応します。`--font 名前` で変更できます。
 
 ### Claude Code 専用の部分
 

@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # Assemble one narrated, captioned mp4 from scenes.tsv + <scene_id>.mp4|webm|mov in <workdir>, then verify it.
-# usage: build.sh <workdir> [--voice NAME] [--rate WPM] [--height 1280] [--crf 23] [--font NAME] [--font-size N] [--title-color 0x222222] [--title-sec 1.2] [--no-captions] [--no-title-cards]
+# usage: build.sh <workdir> [--captions] [--voice NAME] [--rate WPM] [--height 1280] [--crf 23] [--font NAME] [--font-size N] [--title-color 0x222222] [--title-sec 1.2] [--no-title-cards]
 set -euo pipefail
 
 usage() { sed -n '2,3p' "$0" | sed 's/^# //' >&2; exit 2; }
 [ $# -ge 1 ] || usage
 DIR=$1; shift
-VOICE= RATE=190 HEIGHT=1280 CRF=23 FONT= FONT_SIZE= TITLE_COLOR=0x222222 TITLE_SEC=1.2 CAPTIONS=1 TITLES=1
+VOICE= RATE=190 HEIGHT=1280 CRF=23 FONT= FONT_SIZE= TITLE_COLOR=0x222222 TITLE_SEC=1.2 CAPTIONS=0 TITLES=1
 while [ $# -gt 0 ]; do
   case $1 in
+    --captions)       CAPTIONS=1;     shift ;;
     --voice)          VOICE=$2;       shift 2 ;;
     --rate)           RATE=$2;        shift 2 ;;
     --height)         HEIGHT=$2;      shift 2 ;;
@@ -47,7 +48,7 @@ if [ "$CAPTIONS" = 1 ] || [ "$TITLES" = 1 ]; then
   elif [ ! -x "$CAP" ] || [ "$SCRIPT_DIR/caption.swift" -nt "$CAP" ]; then
     mkdir -p "$SCRIPT_DIR/.bin"
     swiftc -O -o "$CAP" "$SCRIPT_DIR/caption.swift" >/dev/null 2>&1 \
-      || { echo "failed to build the caption renderer; use --no-captions --no-title-cards" >&2; exit 1; }
+      || { echo "failed to build the caption renderer; drop --captions and pass --no-title-cards" >&2; exit 1; }
   fi
 fi
 
