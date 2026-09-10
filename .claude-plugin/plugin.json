@@ -1,10 +1,21 @@
 {
   "name": "demo-video",
   "description": "Record a narrated, captioned demo video of a pull request actually working (Chromium or iOS Simulator Safari), then attach it to the PR with gh.",
-  "version": "0.1.0",
-  "author": { "name": "shiruten" },
+  "version": "0.1.1",
+  "author": {
+    "name": "shiruten"
+  },
   "homepage": "https://github.com/shiruten/demo-video",
   "repository": "https://github.com/shiruten/demo-video",
   "license": "MIT",
-  "keywords": ["demo", "video", "pull-request", "screen-recording", "narration", "ios-simulator", "agent-browser", "agent-device"]
+  "keywords": [
+    "demo",
+    "video",
+    "pull-request",
+    "screen-recording",
+    "narration",
+    "ios-simulator",
+    "agent-browser",
+    "agent-device"
+  ]
 }
