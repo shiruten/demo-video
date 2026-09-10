@@ -1,108 +1,206 @@
 # demo-video
 
-A [Claude Code](https://code.claude.com) plugin for macOS that records a **narrated, captioned demo video of a pull request actually working** and attaches it to the PR.
+A [Claude Code](https://code.claude.com) plugin for macOS. It records a short video that shows a pull request's feature actually working, adds spoken narration and captions, and can attach the video to the PR.
 
-- Real screen recordings, not screenshots: Chromium via [agent-browser](https://github.com/vercel-labs/agent-browser) (`web`) or Safari on the iOS Simulator via [agent-device](https://www.npmjs.com/package/agent-device) + `simctl` (`ios`, real WebKit)
-- One narration sentence per scene, spoken with macOS `say` and burned in as a caption (reviewers are often muted)
-- Deterministic assembly with ffmpeg: each scene lasts `max(video, audio)`, title cards between scenes, stream specs asserted before concatenation
-- Verification Claude can actually do: a 3×3 contact sheet per scene, since it cannot play video
-- Optional one-line attachment with `gh pr comment --attach` (gh ≥ 2.99). Without a PR it just produces the mp4 and prints the command
+Reviewers press play and see the change; they do not have to check out the branch.
 
-Everything runs locally. Narration text never leaves the machine.
+## What you get
 
-### What is Claude Code-specific, and what is not
+- **Real screen recordings**, not screenshots. Two targets: `web` records Chromium through [agent-browser](https://github.com/vercel-labs/agent-browser); `ios` records Safari on the iOS Simulator (real WebKit) through [agent-device](https://www.npmjs.com/package/agent-device) and `xcrun simctl`.
+- **One sentence of narration per scene**, spoken by macOS `say` and also burned in as a caption, so the video works with the sound off.
+- **A short title card before each scene** naming what is about to happen.
+- **A paste-ready PR comment** (`summary.md`) with a table of scenes, and optionally the upload itself via `gh pr comment --attach`.
 
-The plugin packaging and `SKILL.md` rely on Claude Code features: the manifest, `/demo-video:record` invocation, argument substitution, and shell blocks that run at load time (`` !`command` ``). Other Agent-Skills-compatible tools will show those blocks as plain text. The scripts under `skills/record/scripts/` have no such dependency: `build.sh`, `rec.sh` and `caption.swift` are ordinary bash and Swift, usable by hand or from any agent that can run a shell.
+Everything runs on your machine. Narration text is never sent to a service.
 
-## Install
+## How it works
 
-```bash
-# try it without installing
-claude --plugin-dir /path/to/demo-video
-
-# or add this repo as a marketplace
-/plugin marketplace add shiruten/demo-video
-/plugin install demo-video@shiruten
+```text
+/demo-video:record <web|ios> [video-name] [#PR or PR URL] [scene requests...]
+  1. Script      write scenes.tsv: one line per scene = id, what happens, narration sentence
+  2. Record      one video file per scene, driving the app in Chromium or Simulator Safari
+  3. Build       scripts/build.sh: narration → captions → title cards → ffmpeg → one mp4 + summary.md
+  4. Show        open the mp4 for you; if a PR was given, ask, then attach it with gh
+  5. Clean up    close sessions, undo fixtures, return to your branch, delete the work folder once the PR has the video
 ```
+
+Each scene lasts as long as the longer of its video and its narration: the last frame is held while the voice finishes, or silence is added while the video finishes. Before joining scenes, the script checks that every piece has the same resolution, frame rate and audio format, and that the total length matches. Because the agent cannot watch a video, the build also writes a 3×3 contact sheet per scene (`sheets/`) that the agent reads to confirm the right things appear.
+
+Claude never starts this on its own. You type the command.
 
 ## Requirements
 
 macOS only (`say`, `xcrun simctl` and Swift are used).
 
-| Needed for | Tool |
+| Needed for | Install |
 | --- | --- |
-| always | `ffmpeg` / `ffprobe` (`brew install ffmpeg`) |
-| captions and title cards | Xcode Command Line Tools (`xcode-select --install`, provides `swiftc`) |
-| `web` | `npm i -g agent-browser` (its postinstall downloads Chrome for Testing) |
-| `ios` | `npm i -g agent-device` and a booted iOS Simulator (Xcode) |
-| attaching to a PR | `gh` 2.99 or newer, authenticated (`gh auth login`) |
+| always | `ffmpeg` and `ffprobe`: `brew install ffmpeg` |
+| captions and title cards | Xcode Command Line Tools: `xcode-select --install` (provides `swiftc`) |
+| `web` target | `npm i -g agent-browser` (downloads its own Chrome on install) |
+| `ios` target | `npm i -g agent-device`, plus Xcode with a booted iOS Simulator |
+| attaching to a PR | GitHub CLI `gh` 2.99 or newer, logged in with `gh auth login` |
+
+Without `gh` (or with an older version) the plugin still produces the video and prints the command you would run to attach it.
+
+## Install
+
+Inside Claude Code:
+
+```text
+/plugin marketplace add shiruten/demo-video
+/plugin install demo-video@shiruten
+```
+
+To try it without installing, clone this repository and start Claude Code with it loaded:
+
+```bash
+git clone https://github.com/shiruten/demo-video.git
+claude --plugin-dir ./demo-video
+```
 
 ## Use
 
 ```text
-/demo-video:record <web|ios> [video-name] [#PR or PR URL] [scene requests...]
-
-/demo-video:record web                       # record Chromium, print the attach command
-/demo-video:record ios my-feature #123       # record Simulator Safari, then attach to PR #123 after confirmation
+/demo-video:record web                      # record the current branch's feature in Chromium; prints the gh command to attach
+/demo-video:record ios checkout-flow #123   # record in Simulator Safari, save as "checkout-flow", attach to PR #123 after you confirm
+/demo-video:record web search-filter show the empty state and the reset button
 ```
 
-The skill only runs when you invoke it (`disable-model-invocation`). It writes `scenes.tsv`, records one file per scene, runs `scripts/build.sh`, shows you the result, and cleans up. Output lives in `~/Movies/pr-demo/<name>/` (`PR_DEMO_DIR` to change) and is deleted once the attachment is confirmed on the PR.
+Videos are built in `~/Movies/pr-demo/<video-name>/` (set `PR_DEMO_DIR` to change). If the video is attached to the PR, that folder is deleted afterwards; the PR comment is the copy that matters. If nothing is attached, the folder is kept.
 
-### Project notes
+### Tell the plugin about your project
 
-Put repo-specific facts in `.claude/demo-video.md` and the skill reads them at run time: test accounts, URLs, user roles, fixture recipes, brand colour, known pitfalls. The plugin itself stays generic.
+Create `.claude/demo-video.md` in your repository with facts the recording needs, and the plugin reads it at run time:
 
-### Narration voice
+```markdown
+- Local app: http://localhost:3000, started with `npm run dev`
+- Test accounts: buyer@example.test / password123, seller@example.test / password123
+- Roles: buyer and seller see different screens; record buyer first
+- Title card colour: 0x1f3a5f
+- Cleanup: delete orders created during the demo
+```
 
-`build.sh` uses the system default voice unless you pass `--voice` (validated; `say` would otherwise fall back silently). For Japanese, `--voice Kyoko`. Captions use the system UI font, which falls back per script; override with `--font`.
+The plugin itself contains nothing specific to any project.
+
+### Narration voice and captions
+
+`build.sh` uses the system's default voice unless you pass `--voice NAME` (for Japanese, `--voice Kyoko`). The name is checked first, because `say` silently uses a different voice when the name is wrong. Captions use the system font, which covers Latin, CJK and other scripts; `--font NAME` overrides it.
+
+Other `build.sh` options: `--rate` (words per minute), `--height` (max output height, default 1280), `--crf` (quality), `--font-size`, `--title-color`, `--title-sec`, `--no-captions`, `--no-title-cards`.
+
+## What is Claude Code-specific
+
+The packaging (`plugin.json`), the `/demo-video:record` command, argument substitution and the shell blocks in `SKILL.md` that run when the skill loads are Claude Code features. Other tools that read `SKILL.md` files will show those blocks as plain text.
+
+The scripts are not tied to Claude Code. `skills/record/scripts/build.sh`, `rec.sh` and `caption.swift` are ordinary bash and Swift: give `build.sh` a folder with `scenes.tsv` and one recording per scene, and it produces the video from any shell.
 
 ## Layout
 
 ```text
 skills/record/
-├── SKILL.md                 workflow and decisions
+├── SKILL.md                 the workflow the agent follows
 ├── references/
-│   ├── ios-safari.md        pre-flight checks, recording, iOS input recipe
-│   └── web-chromium.md      agent-browser setup and recording
+│   ├── ios-safari.md        Simulator Safari: checks before recording, recording, input quirks
+│   └── web-chromium.md      agent-browser: setup, viewport, recording
 └── scripts/
-    ├── build.sh             scenes.tsv → say → captions → title cards → ffmpeg → verification → mp4 + summary.md
-    ├── rec.sh               simctl recording start/stop (pid file)
-    └── caption.swift        CoreText caption renderer (Homebrew ffmpeg has no drawtext)
+    ├── build.sh             scenes.tsv → narration → captions → title cards → ffmpeg → mp4 + summary.md
+    ├── rec.sh               start/stop a simulator screen recording
+    └── caption.swift        draws caption and title images with CoreText (no ffmpeg text filters needed)
 ```
 
 ---
 
 ## 日本語
 
-PR の機能が**実際に動く様子を録画し、ナレーションと字幕を付けた 1 本の mp4** にして PR に添付する、macOS 向けの Claude Code plugin です。plugin の枝組み（マニフェスト・`/demo-video:record`・引数置換・読込時に走るシェルブロック）は Claude Code 専用ですが、`skills/record/scripts/` の `build.sh`・`rec.sh`・`caption.swift` は普通の bash と Swift なので、手で叩いても他のエージェントからでも使えます。
+macOS 向けの [Claude Code](https://code.claude.com) plugin です。PR の機能が実際に動く様子を短い動画に録画し、ナレーションと字幕を付けて、PR に添付できます。レビュアーは再生するだけで変更を確認でき、ブランチをチェックアウトする必要がありません。
 
-- 静止画ではなく実操作の録画。`web` は agent-browser（Chromium）、`ios` は agent-device + `simctl`（シミュレータの Safari、本物の WebKit）
-- シーンごとに 1 文のナレーションを macOS の `say` で読み上げ、同じ文を字幕として焼き込み（GitHub ではミュートで見られることが多い）
-- ffmpeg で決定的に組み立て。各シーンの長さは `max(映像, 音声)`、シーン間にタイトルカード、concat 前に全区間の諸元一致を検査
-- Claude は動画を再生できないので、シーンごとの 3×3 コンタクトシートで検証
-- PR 番号を渡せば `gh pr comment --attach` で添付（gh 2.99 以上）。渡さなければ mp4 を作ってコマンドを表示するだけ
+### できること
 
-すべてローカルで完結し、ナレーション文は外部に送られません。
+- **実操作の録画**（静止画ではない）。`web` は agent-browser で Chromium を、`ios` は agent-device と `xcrun simctl` で iOS シミュレータの Safari（本物の WebKit）を録画
+- **シーンごとに 1 文のナレーション**を macOS の `say` で読み上げ、同じ文を字幕として焼き込む。音を出せない環境でも内容が伝わる
+- **各シーンの前に短いタイトルカード**
+- **貼り付け用の PR コメント本文**（`summary.md`、シーンの表入り）。PR 番号を渡せば `gh pr comment --attach` で添付まで行う
 
-### 使い方
+すべて手元の Mac で完結し、ナレーション文は外部に送られません。
+
+### 動き方
 
 ```text
 /demo-video:record <web|ios> [動画名] [#PR か PR の URL] [シーンの要望...]
+  1. 台本      scenes.tsv を書く。1 行 1 シーン = id、操作の要点、ナレーション 1 文
+  2. 録画      シーンごとに 1 ファイル。Chromium かシミュレータ Safari でアプリを操作
+  3. 組み立て  scripts/build.sh: 音声 → 字幕 → タイトルカード → ffmpeg → 1 本の mp4 + summary.md
+  4. 確認      mp4 を開いて見せる。PR 指定があれば許可を得て gh で添付
+  5. 後片付け  セッションを閉じ、フィクスチャを戻し、元のブランチへ。PR に貼れたら作業フォルダを削除
 ```
 
-ナレーションが日本語なら `build.sh` に `--voice Kyoko` を渡します（SKILL.md がそう指示します）。プロジェクト固有の事情（テストアカウント・URL・役割・フィクスチャ・ブランド色）は `.claude/demo-video.md` に書いておくと、実行時に読み込まれます。
+各シーンの長さは「映像と音声の長い方」です。声が長ければ最後のコマを止め絵にし、映像が長ければ無音を足します。結合前に全シーンの解像度・フレームレート・音声形式が揃っていることと、合計長が一致することを検査します。エージェントは動画を再生できないので、シーンごとの 3×3 コンタクトシート（`sheets/`）を読んで、狙った画面が映っていることを確認します。
+
+このコマンドは Claude が勝手に起動することはありません。人が打ったときだけ動きます。
 
 ### 必要なもの
 
 macOS 専用（`say`・`xcrun simctl`・Swift を使うため）。
 
-| 用途 | ツール |
+| 用途 | 導入 |
 | --- | --- |
-| 常に | `ffmpeg` / `ffprobe`（`brew install ffmpeg`） |
-| 字幕とタイトルカード | Xcode Command Line Tools（`xcode-select --install`。`swiftc` が入る） |
-| `web` | `npm i -g agent-browser`（postinstall が Chrome for Testing を落とす） |
-| `ios` | `npm i -g agent-device` と起動済みの iOS シミュレータ（Xcode） |
-| PR への添付 | `gh` 2.99 以上、`gh auth login` 済み |
+| 常に | `ffmpeg` と `ffprobe`: `brew install ffmpeg` |
+| 字幕とタイトルカード | Xcode Command Line Tools: `xcode-select --install`（`swiftc` が入る） |
+| `web` | `npm i -g agent-browser`（導入時に自前の Chrome を取得） |
+| `ios` | `npm i -g agent-device` と、Xcode で起動した iOS シミュレータ |
+| PR への添付 | GitHub CLI `gh` 2.99 以上、`gh auth login` 済み |
+
+`gh` が無い、または古いときも動画は作られ、添付に使うコマンドが表示されます。
+
+### 導入
+
+Claude Code の中で:
+
+```text
+/plugin marketplace add shiruten/demo-video
+/plugin install demo-video@shiruten
+```
+
+導入せずに試すなら、clone して読み込んで起動します。
+
+```bash
+git clone https://github.com/shiruten/demo-video.git
+claude --plugin-dir ./demo-video
+```
+
+### 使い方
+
+```text
+/demo-video:record web                      # 現在のブランチの機能を Chromium で録画。添付用の gh コマンドを表示
+/demo-video:record ios checkout-flow #123   # シミュレータ Safari で録画し「checkout-flow」として保存、確認のうえ PR #123 に添付
+/demo-video:record web search-filter 空の状態とリセットボタンを見せて
+```
+
+動画は `~/Movies/pr-demo/<動画名>/` に作られます（`PR_DEMO_DIR` で変更可）。PR に添付できたらこのフォルダは削除されます。原本は PR のコメントです。添付しなかった場合は残ります。
+
+### プロジェクトの事情を伝える
+
+リポジトリに `.claude/demo-video.md` を置くと、実行時に読み込まれます。
+
+```markdown
+- ローカル: http://localhost:3000、起動は `npm run dev`
+- テストアカウント: buyer@example.test / password123、seller@example.test / password123
+- 役割: 購入者と出品者で画面が違う。購入者から撮る
+- タイトルカードの色: 0x1f3a5f
+- 後片付け: デモ中に作った注文を削除
+```
+
+plugin 本体には特定のプロジェクトの情報は入っていません。
+
+### ナレーションの声と字幕
+
+`build.sh` は `--voice 名前` を渡さなければ OS の既定音声を使います（日本語なら `--voice Kyoko`）。`say` は存在しない名前を渡すと黙って別の声になるので、先に名前を検証します。字幕はシステムフォントで描くため、日本語を含む多くの文字に対応します。`--font 名前` で変更できます。
+
+### Claude Code 専用の部分
+
+`plugin.json`、`/demo-video:record` コマンド、引数の置換、`SKILL.md` 内で読込時に実行されるシェルブロックは Claude Code の機能です。他のツールで `SKILL.md` を読むと、それらは文字列として表示されます。
+
+スクリプトは Claude Code に依存しません。`skills/record/scripts/` の `build.sh`・`rec.sh`・`caption.swift` は普通の bash と Swift で、`scenes.tsv` とシーンごとの録画が入ったフォルダを `build.sh` に渡せば、どのシェルからでも動画ができます。
 
 ## License
 

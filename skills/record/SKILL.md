@@ -141,6 +141,6 @@ rm -rf ~/Movies/pr-demo/<name>
 | --- | --- |
 | `scripts/build.sh` | scenes.tsv → say → captions → title cards → ffmpeg → verification → one mp4 + summary.md |
 | `scripts/rec.sh` | start/stop a simctl screen recording (pid file), for `ios` |
-| `scripts/caption.swift` | renders caption/title PNGs with CoreText (Homebrew ffmpeg has no `drawtext`); built on first use |
+| `scripts/caption.swift` | renders caption/title PNGs with CoreText, so no ffmpeg text filters are needed; built on first use |
 | `references/ios-safari.md` | Simulator Safari: prerequisites, pre-flight checks, recording, input recipe |
 | `references/web-chromium.md` | agent-browser: prerequisites, viewport, recording, caveats |
