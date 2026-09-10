@@ -1,0 +1,14 @@
+{
+  "name": "shiruten",
+  "owner": {
+    "name": "shiruten"
+  },
+  "plugins": [
+    {
+      "name": "demo-video",
+      "source": "./",
+      "description": "Record a narrated, captioned demo video of a pull request actually working, then attach it to the PR with gh."
+    }
+  ],
+  "description": "Plugins by shiruten: demo-video records narrated, captioned demo videos of pull requests."
+}
