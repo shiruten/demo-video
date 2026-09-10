@@ -1,16 +1,18 @@
 # demo-video
 
-A Claude Code plugin that records a **narrated, captioned demo video of a pull request actually working** and attaches it to the PR.
+A [Claude Code](https://code.claude.com) plugin for macOS that records a **narrated, captioned demo video of a pull request actually working** and attaches it to the PR.
 
 - Real screen recordings, not screenshots: Chromium via [agent-browser](https://github.com/vercel-labs/agent-browser) (`web`) or Safari on the iOS Simulator via [agent-device](https://www.npmjs.com/package/agent-device) + `simctl` (`ios`, real WebKit)
 - One narration sentence per scene, spoken with macOS `say` and burned in as a caption (reviewers are often muted)
 - Deterministic assembly with ffmpeg: each scene lasts `max(video, audio)`, title cards between scenes, stream specs asserted before concatenation
 - Verification Claude can actually do: a 3×3 contact sheet per scene, since it cannot play video
-- Optional one-line attachment with `gh pr comment --attach` (gh ≥ 2.99, 2026-09). Without a PR it just produces the mp4 and prints the command
+- Optional one-line attachment with `gh pr comment --attach` (gh ≥ 2.99). Without a PR it just produces the mp4 and prints the command
 
 Everything runs locally. Narration text never leaves the machine.
 
-Lineage: [Damien Tanner's demo-video gist](https://gist.github.com/dctanner/ee7fe7997bba0efbca49b8c0bdc1936a) (screenshots → cloud TTS → ffmpeg → R2), rebuilt around real recordings and local tools.
+### What is Claude Code-specific, and what is not
+
+The plugin packaging and `SKILL.md` rely on Claude Code features: the manifest, `/demo-video:record` invocation, argument substitution, and shell blocks that run at load time (`` !`command` ``). Other Agent-Skills-compatible tools will show those blocks as plain text. The scripts under `skills/record/scripts/` have no such dependency: `build.sh`, `rec.sh` and `caption.swift` are ordinary bash and Swift, usable by hand or from any agent that can run a shell.
 
 ## Install
 
@@ -23,7 +25,17 @@ claude --plugin-dir /path/to/demo-video
 /plugin install demo-video@shiruten
 ```
 
-Requirements (macOS): `ffmpeg`, `gh` 2.99+ (attach only), Xcode Command Line Tools (`swiftc`, for captions). Plus `npm i -g agent-browser` for `web`, or `npm i -g agent-device` and a booted iOS Simulator for `ios`.
+## Requirements
+
+macOS only (`say`, `xcrun simctl` and Swift are used).
+
+| Needed for | Tool |
+| --- | --- |
+| always | `ffmpeg` / `ffprobe` (`brew install ffmpeg`) |
+| captions and title cards | Xcode Command Line Tools (`xcode-select --install`, provides `swiftc`) |
+| `web` | `npm i -g agent-browser` (its postinstall downloads Chrome for Testing) |
+| `ios` | `npm i -g agent-device` and a booted iOS Simulator (Xcode) |
+| attaching to a PR | `gh` 2.99 or newer, authenticated (`gh auth login`) |
 
 ## Use
 
@@ -62,7 +74,7 @@ skills/record/
 
 ## 日本語
 
-PR の機能が**実際に動く様子を録画し、日本語ナレーションと字幕を付けた 1 本の mp4** にして PR に添付する Claude Code plugin です。
+PR の機能が**実際に動く様子を録画し、ナレーションと字幕を付けた 1 本の mp4** にして PR に添付する、macOS 向けの Claude Code plugin です。plugin の枝組み（マニフェスト・`/demo-video:record`・引数置換・読込時に走るシェルブロック）は Claude Code 専用ですが、`skills/record/scripts/` の `build.sh`・`rec.sh`・`caption.swift` は普通の bash と Swift なので、手で叩いても他のエージェントからでも使えます。
 
 - 静止画ではなく実操作の録画。`web` は agent-browser（Chromium）、`ios` は agent-device + `simctl`（シミュレータの Safari、本物の WebKit）
 - シーンごとに 1 文のナレーションを macOS の `say` で読み上げ、同じ文を字幕として焼き込み（GitHub ではミュートで見られることが多い）
@@ -82,7 +94,15 @@ PR の機能が**実際に動く様子を録画し、日本語ナレーション
 
 ### 必要なもの
 
-macOS、`ffmpeg`、`gh` 2.99 以上（添付するときだけ）、Xcode Command Line Tools（字幕の描画）。`web` は `npm i -g agent-browser`、`ios` は `npm i -g agent-device` と起動済みの iOS シミュレータ。
+macOS 専用（`say`・`xcrun simctl`・Swift を使うため）。
+
+| 用途 | ツール |
+| --- | --- |
+| 常に | `ffmpeg` / `ffprobe`（`brew install ffmpeg`） |
+| 字幕とタイトルカード | Xcode Command Line Tools（`xcode-select --install`。`swiftc` が入る） |
+| `web` | `npm i -g agent-browser`（postinstall が Chrome for Testing を落とす） |
+| `ios` | `npm i -g agent-device` と起動済みの iOS シミュレータ（Xcode） |
+| PR への添付 | `gh` 2.99 以上、`gh auth login` 済み |
 
 ## License
 

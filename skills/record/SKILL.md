@@ -9,7 +9,20 @@ allowed-tools: Bash(${CLAUDE_SKILL_DIR}/scripts/*) Bash(agent-device *) Bash(age
 
 Turn "this PR works" into a 30–90 second video a reviewer can just play. Each scene is a real recording of the feature being used, with one narration sentence spoken by `say` and burned in as a caption (reviewers on GitHub are often muted). The pipeline is local: nothing leaves the machine except the final upload you approve.
 
-Lineage: Damien Tanner's demo-video gist (screenshots → cloud TTS → ffmpeg → object storage). This skill swaps in real recordings, a local voice, deterministic assembly with verification, and direct PR attachment.
+## Prerequisites
+
+macOS only: narration uses `say`, iOS recording uses `xcrun simctl`, captions are rendered with Swift.
+
+| Needed for | Tool | Check |
+| --- | --- | --- |
+| always | `ffmpeg` / `ffprobe` on PATH | `ffmpeg=` below |
+| captions & title cards | Xcode Command Line Tools (`swiftc`) | `swiftc=`; otherwise pass `--no-captions --no-title-cards` |
+| `web` | `agent-browser` (`npm i -g agent-browser`) with a Chrome it can launch | `agent-browser=`, `chrome=` |
+| `ios` | `agent-device` (`npm i -g agent-device`) and a booted iOS Simulator | `agent-device=`, `simulator_booted=` |
+| attaching to a PR | `gh` 2.99 or newer (`--attach`), authenticated for the repo | `gh=` |
+| the app itself | the PR's build running locally, plus test accounts/URLs from the project notes or the request | — |
+
+The environment block below fills in the right-hand column at run time. If a row your target needs shows MISSING, stop and tell the user instead of improvising.
 
 ## Arguments
 
@@ -34,7 +47,7 @@ echo "keyboard=$(xcrun simctl spawn booted defaults read com.apple.Preferences A
 echo "voices=$(say -v '?' 2>/dev/null | awk '{print $1}' | tr '\n' ' ' | cut -c1-160)"
 ```
 
-If something the chosen target needs is MISSING, stop and tell the user instead of improvising. `gh` 2.99+ is needed only for attaching. `swiftc` (Xcode Command Line Tools) renders captions; without it pass `--no-captions --no-title-cards`. Output goes to `~/Movies/pr-demo/<name>/` (override with `PR_DEMO_DIR`), outside the repo so `git status` stays clean.
+Output goes to `~/Movies/pr-demo/<name>/` (override with `PR_DEMO_DIR`), outside the repo so `git status` stays clean.
 
 ## Project notes (if the repo provides them)
 
